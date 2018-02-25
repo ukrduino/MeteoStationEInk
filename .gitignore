@@ -1,0 +1,9 @@
+*.user
+[Dd]ebug/
+.vs/
+*.vcxproj
+*.vcxproj.filters
+__vm
+!**/packages/build/
+!*.[Cc]ache/
+Credentials.h
