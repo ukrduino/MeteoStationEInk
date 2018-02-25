@@ -13,7 +13,8 @@
 #include "Images.h"
 #include <imglib\gridicons_arrow_up.h>
 #include <imglib\gridicons_arrow_down.h>
-
+#include <imglib\gridicons_arrow_left.h>
+#include <imglib\gridicons_house.h>
 
 
 const char* mqtt_server = MQTT_SERVER_IP;
@@ -36,6 +37,8 @@ String sensorHumidity = "0";
 String outTemperature = "0";
 float h = 0;
 float t = 0;
+float outTemp = 0;
+float outTemp_prev = 0;
 unsigned long lastGetSensorData = 0;
 int getSensorDataPeriod = 15000;
 
@@ -52,6 +55,7 @@ void setup()
 
 //Reconnection to MQTT broker
 void reconnect() {
+	int i = 0;
 	// Loop until we're reconnected
 	while (!client.connected()) {
 		Serial.print("Attempting MQTT connection...");
@@ -69,6 +73,11 @@ void reconnect() {
 			Serial.println(" try again in 5 seconds");
 			// Wait 5 seconds before retrying
 			delay(5000);
+		}
+		i++;
+		if (i > 15)
+		{
+			return;
 		}
 	}
 }
@@ -109,17 +118,24 @@ void callback(char* topic, byte* payload, unsigned int length) {
 	if (strcmp(topic, "WittyCloud/temp") == 0) {
 		char* buffer = (char*)payload;
 		buffer[length] = '\0';
-		float temp = atof(buffer);
-		outTemperature = String(temp, 1);
+		float outT = atof(buffer);
+		if (fabs(outTemp - outT) < 0.1)
+		{
+			drawDisplay();
+		}
+		outTemperature = String(outTemp, 1);
 	}
 }
 
 void loop()
 {
-	getDTHSensorData();	
-	//restartIfDisconnected();
-	drawDisplay();
-	delay(30000);
+	// process MQTT connection
+	if (!client.connected()) {
+		reconnect();
+	}
+	client.loop();
+	getDTHSensorData();
+	restartIfDisconnected();
 }
 
 
@@ -129,30 +145,42 @@ void drawDisplay()
 	display.fillScreen(GxEPD_WHITE);
 	display.setFont(&FreeMonoBold18pt7b);
 	display.setTextColor(GxEPD_BLACK);
-	//uint16_t box_x = 10;
-	//uint16_t box_y = 15;
-	//uint16_t box_w = 170;
-	//uint16_t box_h = 20;
-	//uint16_t cursor_y = box_y + 16;
+	display.drawBitmap(Olga_Sergey, 0, 100, 300, 200, GxEPD_BLACK);
 	display.fillRect(300, 0, 3, 300, GxEPD_BLACK);
 	display.fillRect(0, 100, 400, 3, GxEPD_BLACK);
 	display.fillRect(100, 0, 3, 100, GxEPD_BLACK);
 	display.fillRect(200, 0, 3, 100, GxEPD_BLACK);
 	display.fillRect(300, 100, 100, 3, GxEPD_BLACK);
 	display.fillRect(300, 200, 100, 3, GxEPD_BLACK);
-	display.drawExampleBitmap(drop_image, 310, 20, 20, 31, GxEPD_WHITE);
-	display.drawExampleBitmap(gridicons_arrow_up, 350, 25, 24, 24, GxEPD_BLACK);
+	display.drawBitmap(drop_image, 310, 20, 20, 31, GxEPD_BLACK);
+	display.drawBitmap(gridicons_house, 350, 25, 24, 24, GxEPD_WHITE);
+	display.drawBitmap(out_temp, 203, 15, 50, 50, GxEPD_BLACK);
+	if (outTemp > outTemp_prev)
+	{
+		display.drawExampleBitmap(gridicons_arrow_up, 260, 25, 24, 24, GxEPD_BLACK);
+	}
+	else if (outTemp < outTemp_prev)
+	{
+		display.drawExampleBitmap(gridicons_arrow_down, 260, 25, 24, 24, GxEPD_BLACK);
+	}
+	else
+	{
+		display.drawExampleBitmap(gridicons_arrow_left, 260, 25, 24, 24, GxEPD_BLACK);
+	}
+	outTemp_prev = outTemp;
 	display.drawExampleBitmap(thermo_image, 303, 110, 43, 50, GxEPD_WHITE);
-	display.drawExampleBitmap(gridicons_arrow_down, 350, 125, 24, 24, GxEPD_BLACK);
+	display.drawExampleBitmap(gridicons_house, 350, 125, 24, 24, GxEPD_BLACK);
 	display.drawExampleBitmap(snow, 307, 207, 80, 80, GxEPD_WHITE);
-	display.fillRect(0, 100, 300, 200, GxEPD_BLACK);
-	display.drawExampleBitmap(Olga_Sergey, 0, 100, 300, 200, GxEPD_WHITE);
 	display.setCursor(310, 90);
 	String hum = String(h, 0) + "%";
 	display.print(hum);
 	display.setCursor(310, 190);
 	String temp = String(t, 1);
 	display.print(temp);
+	display.setCursor(210, 90);
+	String out_temper = String(outTemp, 1);
+	//display.setFont(&FreeMonoBold12pt7b);
+	display.print(out_temper);
 	display.update();
 }
 
@@ -171,24 +199,27 @@ void getDTHSensorData() {
 			Serial.println("Failed to read from DHT sensor!");
 			return;
 		}
-		Serial.print("Humidity: ");
-		Serial.print(h);
-		Serial.print(" %\t");
-		Serial.print("Temperature: ");
-		Serial.print(t);
-		Serial.println(" *C ");
+		//Serial.print("Humidity: ");
+		//Serial.print(h);
+		//Serial.print(" %\t");
+		//Serial.print("Temperature: ");
+		//Serial.print(t);
+		//Serial.println(" *C ");
 		if (sensorHum != h || sensorTemp != t)
 		{
-			Serial.println(h);
-			Serial.println(t);
-			Serial.println(sensorHum);
-			Serial.println(sensorTemp);
-			h = sensorHum;
-			t = sensorTemp;
+			//Serial.println(h);
+			//Serial.println(t);
+			//Serial.println(sensorHum);
+			//Serial.println(sensorTemp);
 			sensorTemperature = String(t);
 			sensorHumidity = String(h);
 			publishSensorData();
-			drawDisplay();
+			if (fabs(h - sensorHum) < 0.1 || fabs(t - sensorTemp) < 0.1)
+			{
+				drawDisplay();
+			}
+			h = sensorHum;
+			t = sensorTemp;
 		}
 	}
 }
