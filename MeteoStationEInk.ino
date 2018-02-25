@@ -124,6 +124,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 			drawDisplay();
 		}
 		outTemperature = String(outTemp, 1);
+		outTemp = outT;
 	}
 }
 
