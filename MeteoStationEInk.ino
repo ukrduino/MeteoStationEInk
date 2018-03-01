@@ -1,3 +1,4 @@
+#include "WifiCredentials.h"
 #include <GxEPD.h>
 #include <GxGDEW042T2/GxGDEW042T2.cpp> 
 #include <Fonts/FreeMonoBold9pt7b.h>
@@ -19,8 +20,10 @@
 
 const char* mqtt_server = MQTT_SERVER_IP;
 WiFiClient espClient;
-unsigned long connectionTime = 60000;
-unsigned long rebootDelay = 600000;
+unsigned long reconnectionPeriod = 600000;
+unsigned long lastBrokerConnectionAttempt = 0;
+unsigned long lastWifiConnectionAttempt = 0;
+
 
 PubSubClient client(espClient);
 char msg[50];
@@ -32,9 +35,6 @@ GxEPD_Class display(io);
 // Pin number for DHT22 data pin
 int dhtPin = 16;
 DHTesp dht;
-String sensorTemperature = "0";
-String sensorHumidity = "0";
-String outTemperature = "0";
 float h = 0;
 float t = 0;
 float outTemp = 0;
@@ -47,64 +47,83 @@ void setup()
 {
 	Serial.begin(115200);
 	display.init();
+	display.fillScreen(GxEPD_WHITE);
+	display.update();
 	dht.setup(dhtPin);
-	setup_wifi();
 	client.setServer(mqtt_server, 1883);
 	client.setCallback(callback);
+	setup_wifi();
+	drawDisplay();
 }
 
-//Reconnection to MQTT broker
-void reconnect() {
-	int i = 0;
-	// Loop until we're reconnected
-	while (!client.connected()) {
-		Serial.print("Attempting MQTT connection...");
-		// Attempt to connect
-		if (client.connect("WemosD1Mini_1")) {
-			Serial.println("connected");
-			// Once connected, publish an announcement...
-			client.publish("WemosD1Mini_1/status", "WemosD1Mini_1 connected");
-			// ... and resubscribe
-			client.subscribe("WittyCloud/temp");
-		}
-		else {
-			Serial.print("failed, rc=");
-			Serial.print(client.state());
-			Serial.println(" try again in 5 seconds");
-			// Wait 5 seconds before retrying
-			delay(5000);
-		}
-		i++;
-		if (i > 15)
-		{
-			return;
-		}
+void loop()
+{		
+	if (!client.connected()) {
+		reconnectToBroker();
+	}
+	client.loop();
+	getDTHSensorData();
+}
+
+//Connection to MQTT broker
+void connectToBroker() {
+	Serial.print("Attempting MQTT connection...");
+	// Attempt to connect
+	if (client.connect("WemosD1Mini_1")) {
+		Serial.println("connected");
+		// Once connected, publish an announcement...
+		client.publish("WemosD1Mini_1/status", "WemosD1Mini_1 connected");
+		// ... and resubscribe
+		client.subscribe("WittyCloud/temp");
+	}
+	else {
+		Serial.print("failed, rc=");
+		Serial.print(client.state());
+		Serial.println(" try again in 5 minutes");
 	}
 }
 
 void setup_wifi() {
 
-	delay(50);
+	delay(500);
 	// We start by connecting to a WiFi network
-	Serial.println();
-	Serial.print("Connecting to ");
-	Serial.println(SSID);
+	int numberOfNetworks = WiFi.scanNetworks();
 
-	WiFi.begin(SSID, PASSWORD);
-
-	while (WiFi.status() != WL_CONNECTED) {
-		delay(500);
-		Serial.print(".");
-		if (millis() > connectionTime)
+	for (int i = 0; i < numberOfNetworks; i++) {
+		Serial.print("Network name: ");
+		Serial.println(WiFi.SSID(i));
+		if (WiFi.SSID(i).equals(SSID_1))
 		{
-			restartIfDisconnected();
+			Serial.print("Connecting to ");
+			Serial.println(SSID_1);
+			WiFi.begin(SSID_1, PASSWORD_1);
+			delay(1000);
+			connectToBroker();
+			return;
+		}
+		else if (WiFi.SSID(i).equals(SSID_2))
+		{
+			Serial.print("Connecting to ");
+			Serial.println(SSID_2);
+			WiFi.begin(SSID_2, PASSWORD_2);
+			delay(1000);
+			connectToBroker();
+			return;
+		}
+		else if (WiFi.SSID(i).equals(SSID_3))
+		{
+			Serial.print("Connecting to ");
+			Serial.println(SSID_3);
+			WiFi.begin(SSID_3, PASSWORD_3);
+			delay(1000);
+			connectToBroker();
+			return;
+		}
+		else
+		{
+			Serial.println("Can't connect to " + WiFi.SSID(i));
 		}
 	}
-
-	Serial.println("");
-	Serial.println("WiFi connected");
-	Serial.println("IP address: ");
-	Serial.println(WiFi.localIP());
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -122,23 +141,39 @@ void callback(char* topic, byte* payload, unsigned int length) {
 		if (fabs(outTemp - outT) < 0.1)
 		{
 			drawDisplay();
+			outTemp = outT;
 		}
-		outTemperature = String(outTemp, 1);
-		outTemp = outT;
 	}
 }
 
-void loop()
-{
-	// process MQTT connection
-	if (!client.connected()) {
-		reconnect();
+
+
+void reconnectWifi() {
+	long now = millis();
+	if (now - lastWifiConnectionAttempt > reconnectionPeriod) {
+		lastWifiConnectionAttempt = now;
+		setup_wifi();
 	}
-	client.loop();
-	getDTHSensorData();
-	restartIfDisconnected();
 }
 
+void reconnectToBroker() {
+	long now = millis();
+	if (now - lastBrokerConnectionAttempt > reconnectionPeriod) {
+		lastBrokerConnectionAttempt = now;
+		{
+			if (WiFi.status() == WL_CONNECTED)
+			{
+				if (!client.connected()) {
+					connectToBroker();
+				}
+			}
+			else
+			{
+				reconnectWifi();
+			}
+		}
+	}
+}
 
 
 void drawDisplay()
@@ -155,23 +190,39 @@ void drawDisplay()
 	display.fillRect(300, 200, 100, 3, GxEPD_BLACK);
 	display.drawBitmap(drop_image, 310, 20, 20, 31, GxEPD_BLACK);
 	display.drawBitmap(gridicons_house, 350, 25, 24, 24, GxEPD_WHITE);
-	display.drawBitmap(out_temp, 203, 15, 50, 50, GxEPD_BLACK);
+	display.drawBitmap(out_temp_icon, 203, 15, 50, 50, GxEPD_BLACK);
 	if (outTemp > outTemp_prev)
 	{
-		display.drawExampleBitmap(gridicons_arrow_up, 260, 25, 24, 24, GxEPD_BLACK);
+		display.drawBitmap(gridicons_arrow_up, 260, 25, 24, 24, GxEPD_WHITE);
 	}
 	else if (outTemp < outTemp_prev)
 	{
-		display.drawExampleBitmap(gridicons_arrow_down, 260, 25, 24, 24, GxEPD_BLACK);
+		display.drawBitmap(gridicons_arrow_down, 260, 25, 24, 24, GxEPD_WHITE);
 	}
 	else
 	{
-		display.drawExampleBitmap(gridicons_arrow_left, 260, 25, 24, 24, GxEPD_BLACK);
+		display.drawBitmap(gridicons_arrow_left, 260, 25, 24, 24, GxEPD_WHITE);
+	}
+	if (WiFi.status() != WL_CONNECTED)
+	{
+		display.drawBitmap(no_wifi, 3, 50, 40, 40, GxEPD_BLACK);
+	}
+	if (WiFi.status() == WL_CONNECTED)
+	{
+		display.drawBitmap(wifi, 5, 50, 40, 40, GxEPD_BLACK);
+		display.setFont(&FreeMonoBold9pt7b);
+		display.setCursor(3, 98);
+		display.print(WiFi.SSID());
+		display.setFont(&FreeMonoBold18pt7b);
+	}
+	if (client.connected())
+	{
+		display.drawBitmap(server, 55, 55, 30, 30, GxEPD_BLACK);
 	}
 	outTemp_prev = outTemp;
-	display.drawExampleBitmap(thermo_image, 303, 110, 43, 50, GxEPD_WHITE);
-	display.drawExampleBitmap(gridicons_house, 350, 125, 24, 24, GxEPD_BLACK);
-	display.drawExampleBitmap(snow, 307, 207, 80, 80, GxEPD_WHITE);
+	display.drawBitmap(thermo_image, 303, 110, 43, 50, GxEPD_BLACK);
+	display.drawBitmap(gridicons_house, 350, 125, 24, 24, GxEPD_WHITE);
+	display.drawBitmap(snow, 307, 207, 80, 80, GxEPD_BLACK);
 	display.setCursor(310, 90);
 	String hum = String(h, 0) + "%";
 	display.print(hum);
@@ -180,8 +231,16 @@ void drawDisplay()
 	display.print(temp);
 	display.setCursor(210, 90);
 	String out_temper = String(outTemp, 1);
-	//display.setFont(&FreeMonoBold12pt7b);
-	display.print(out_temper);
+	if (out_temper.length() > 4)
+	{
+		display.setFont(&FreeMonoBold12pt7b);
+		display.print(out_temper);
+		display.setFont(&FreeMonoBold18pt7b);
+	}
+	else
+	{
+		display.print(out_temper);
+	}
 	display.update();
 }
 
@@ -189,6 +248,7 @@ void getDTHSensorData() {
 	long now = millis();
 	if (now - lastGetSensorData > getSensorDataPeriod) {
 		lastGetSensorData = now;
+		Serial.println("Reading from DHT sensor!");
 		// Reading temperature or humidity takes about 250 milliseconds!
 		// Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
 		float sensorHum = dht.getHumidity();
@@ -196,44 +256,30 @@ void getDTHSensorData() {
 		float sensorTemp = dht.getTemperature();
 		// Read temperature as Fahrenheit (isFahrenheit = true)
 		// Check if any reads failed and exit early (to try again).
-		if (isnan(h) || isnan(t)) {
+		if (isnan(sensorHum) || isnan(sensorTemp)) {
 			Serial.println("Failed to read from DHT sensor!");
 			return;
 		}
-		//Serial.print("Humidity: ");
-		//Serial.print(h);
-		//Serial.print(" %\t");
-		//Serial.print("Temperature: ");
-		//Serial.print(t);
-		//Serial.println(" *C ");
 		if (sensorHum != h || sensorTemp != t)
 		{
-			//Serial.println(h);
-			//Serial.println(t);
-			//Serial.println(sensorHum);
-			//Serial.println(sensorTemp);
-			sensorTemperature = String(t);
-			sensorHumidity = String(h);
-			publishSensorData();
-			if (fabs(h - sensorHum) < 0.1 || fabs(t - sensorTemp) < 0.1)
+			// redraw display only if data changed more then  0.1
+			if (fabs(h - sensorHum) > 1 || fabs(t - sensorTemp) > 0.1)
 			{
+				h = sensorHum;
+				t = sensorTemp;
+				if (client.connected()) {
+					publishSensorData();
+				}
 				drawDisplay();
 			}
-			h = sensorHum;
-			t = sensorTemp;
 		}
 	}
 }
 
 void publishSensorData() {
+	String sensorTemperature = String(t);
+	String sensorHumidity = String(h);
 	client.publish("WemosD1Mini_1/temperature", String(sensorTemperature).c_str());
 	client.publish("WemosD1Mini_1/humidity", String(sensorHumidity).c_str());
 }
 
-void restartIfDisconnected() {
-	if (WiFi.status() != WL_CONNECTED)
-	{
-		delay(rebootDelay);
-		ESP.restart();
-	}
-}
