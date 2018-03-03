@@ -20,7 +20,7 @@
 
 const char* mqtt_server = MQTT_SERVER_IP;
 WiFiClient espClient;
-unsigned long reconnectionPeriod = 600000;
+unsigned long reconnectionPeriod = 60000;
 unsigned long lastBrokerConnectionAttempt = 0;
 unsigned long lastWifiConnectionAttempt = 0;
 
@@ -41,6 +41,8 @@ float outTemp = 0;
 float outTemp_prev = 0;
 unsigned long lastGetSensorData = 0;
 int getSensorDataPeriod = 15000;
+String iconId = "";
+String windSpeed = "";
 
 
 void setup()
@@ -73,8 +75,11 @@ void connectToBroker() {
 		Serial.println("connected");
 		// Once connected, publish an announcement...
 		client.publish("WemosD1Mini_1/status", "WemosD1Mini_1 connected");
+		client.publish("Weather/update", "1");
 		// ... and resubscribe
 		client.subscribe("WittyCloud/temp");
+		client.subscribe("Wheather/showIcon");
+		client.subscribe("Wheather/showWind");
 	}
 	else {
 		Serial.print("failed, rc=");
@@ -138,10 +143,31 @@ void callback(char* topic, byte* payload, unsigned int length) {
 		char* buffer = (char*)payload;
 		buffer[length] = '\0';
 		float outT = atof(buffer);
-		if (fabs(outTemp - outT) < 0.1)
+		if (fabs(outTemp - outT) > 0.1)
 		{
-			drawDisplay();
+			outTemp_prev = outTemp;
 			outTemp = outT;
+			drawDisplay();
+		}
+	}
+	if (strcmp(topic, "Wheather/showIcon") == 0) {
+		char* buffer = (char*)payload;
+		buffer[length] = '\0';
+		String icon = String(buffer);
+		if (!iconId.equals(icon))
+		{
+			iconId = icon;
+			drawDisplay();
+		}
+	}
+	if (strcmp(topic, "Wheather/showWind") == 0) {
+		char* buffer = (char*)payload;
+		buffer[length] = '\0';
+		String speed = String(buffer);
+		if (!windSpeed.equals(speed))
+		{
+			windSpeed = speed;
+			drawDisplay();
 		}
 	}
 }
@@ -219,10 +245,9 @@ void drawDisplay()
 	{
 		display.drawBitmap(server, 55, 55, 30, 30, GxEPD_BLACK);
 	}
-	outTemp_prev = outTemp;
 	display.drawBitmap(thermo_image, 303, 110, 43, 50, GxEPD_BLACK);
 	display.drawBitmap(gridicons_house, 350, 125, 24, 24, GxEPD_WHITE);
-	display.drawBitmap(snow, 307, 207, 80, 80, GxEPD_BLACK);
+	showWeatherIcon();
 	display.setCursor(310, 90);
 	String hum = String(h, 0) + "%";
 	display.print(hum);
@@ -242,6 +267,49 @@ void drawDisplay()
 		display.print(out_temper);
 	}
 	display.update();
+}
+
+void showWeatherIcon() {
+	if (iconId.equals("01")) // clear sky
+	{
+		display.drawBitmap(sun, 307, 207, 80, 80, GxEPD_BLACK);
+	}
+	else if (iconId.equals("02")) // few clouds
+	{
+		display.drawBitmap(sun_cloud, 307, 207, 80, 80, GxEPD_BLACK);
+	}
+	else if (iconId.equals("03")) // scattered clouds
+	{
+		display.drawBitmap(cloud, 307, 207, 80, 80, GxEPD_BLACK);
+	}
+	else if (iconId.equals("04")) // broken clouds
+	{
+		display.drawBitmap(heavy_clouds, 307, 207, 80, 80, GxEPD_BLACK);
+	}
+	else if (iconId.equals("09")) // shower rain
+	{
+		display.drawBitmap(shower, 307, 207, 80, 80, GxEPD_BLACK);
+	}
+	else if (iconId.equals("10")) // rain
+	{
+		display.drawBitmap(rain, 307, 207, 80, 80, GxEPD_BLACK);
+	}
+	else if (iconId.equals("11")) // thunderstorm
+	{
+		display.drawBitmap(storm, 307, 207, 80, 80, GxEPD_BLACK);
+	}
+	else if (iconId.equals("13")) // snow
+	{
+		display.drawBitmap(snow, 307, 207, 80, 80, GxEPD_BLACK);
+	}
+	else if (iconId.equals("50")) // mist
+	{
+		display.drawBitmap(mist, 307, 207, 80, 80, GxEPD_BLACK);
+	}
+	else
+	{
+		display.drawBitmap(question, 307, 207, 80, 80, GxEPD_BLACK);
+	}
 }
 
 void getDTHSensorData() {
