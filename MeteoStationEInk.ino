@@ -42,7 +42,7 @@ float outTemp_prev = 0;
 unsigned long lastGetSensorData = 0;
 int getSensorDataPeriod = 15000;
 String iconId = "";
-String windSpeed = "";
+float windSpeed = 0;
 
 
 void setup()
@@ -163,10 +163,10 @@ void callback(char* topic, byte* payload, unsigned int length) {
 	if (strcmp(topic, "Wheather/showWind") == 0) {
 		char* buffer = (char*)payload;
 		buffer[length] = '\0';
-		String speed = String(buffer);
-		if (!windSpeed.equals(speed))
+		float wind = atof(buffer);
+		if (fabs(windSpeed - wind) > 1)
 		{
-			windSpeed = speed;
+			windSpeed = wind;
 			drawDisplay();
 		}
 	}
@@ -266,6 +266,11 @@ void drawDisplay()
 	{
 		display.print(out_temper);
 	}
+	display.setFont(&FreeMonoBold9pt7b);
+	display.setCursor(315, 298);
+	String windSp = String(windSpeed, 0) + " m/s";
+	display.print(windSp);
+	display.setFont(&FreeMonoBold18pt7b);
 	display.update();
 }
 
