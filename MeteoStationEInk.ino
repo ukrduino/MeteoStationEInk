@@ -49,10 +49,13 @@ int pressureSavePeriod = 15 * 60000;
 unsigned long lastGetSensorData = 0;
 int getSensorDataPeriod = 60000;
 String iconId = "";
-String dayOfWeek = "";
-String day = "";
-String month = "";
+String dayOfWeek = "--------";
+String day = "--";
+String month = "---";
 float windSpeed = 0;
+int screenRefreshPeriod = 60000;
+unsigned long lastScreenRefresh = 0;
+
 
 
 void setup()
@@ -245,9 +248,12 @@ void callback(char* topic, byte* payload, unsigned int length) {
 		char* buffer = (char*)payload;
 		buffer[length] = '\0';
 		String date = String(buffer);
-		dayOfWeek = getSubString(date, ' ', 1);
-		dayOfWeek = getSubString(date, ' ', 2);
-		dayOfWeek = getSubString(date, ' ', 3);
+		dayOfWeek = getSubString(date, ' ', 0);
+		Serial.println(dayOfWeek);
+		day = getSubString(date, ' ', 1);
+		Serial.println(day);
+		month = getSubString(date, ' ', 2);
+		Serial.println(month);
 	}
 }
 
@@ -295,13 +301,14 @@ void drawDisplay()
 	display.fillRect(300, 190, 100, 3, GxEPD_BLACK);
 	//Current date
 	display.setFont(&FreeMonoBold9pt7b);
-	display.setCursor(5, 32);
+	display.setCursor(2, 37);
 	display.print(dayOfWeek);
 	display.setFont(&FreeMonoBold18pt7b);
-	display.setCursor(30, 50);
+	display.setCursor(30, 65);
 	display.print(day);
-	display.setFont(&FreeMonoBold9pt7b);
-	display.setCursor(5, 95);
+	display.setFont(&FreeMonoBold18pt7b);
+	display.setCursor(20, 95);
+	display.print(month);
 
 	//Out temperature
 	display.drawBitmap(out_temp_icon, 203, 17, 50, 50, GxEPD_BLACK);
@@ -366,7 +373,10 @@ void drawDisplay()
 	String windSp = String(windSpeed, 0) + " m/s";
 	display.print(windSp);
 	display.setFont(&FreeMonoBold18pt7b);
-	display.update();
+	long now = millis();
+	if (now - lastScreenRefresh > screenRefreshPeriod) {
+		display.update();
+	}
 }
 
 void showTrendIcon(const uint8_t *bitmap) {
