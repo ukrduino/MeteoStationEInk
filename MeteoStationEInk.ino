@@ -304,10 +304,10 @@ void drawDisplay()
 	display.setCursor(2, 37);
 	display.print(dayOfWeek);
 	display.setFont(&FreeMonoBold18pt7b);
-	display.setCursor(30, 65);
+	display.setCursor(30, 73);
 	display.print(day);
-	display.setFont(&FreeMonoBold18pt7b);
-	display.setCursor(20, 95);
+	display.setFont(&FreeMonoBold12pt7b);
+	display.setCursor(30, 95);
 	display.print(month);
 
 	//Out temperature
@@ -350,7 +350,7 @@ void drawDisplay()
 	String livHum = String(livHumidity, 0) + "%";
 	display.print(livHum);
 	//Pressure
-	display.setCursor(105, 95);
+	display.setCursor(108, 95);
 	String press = String(pressure, 0);
 	display.print(press);
 	display.drawLine(100, 37, 200, 37, GxEPD_BLACK);
@@ -376,6 +376,7 @@ void drawDisplay()
 	long now = millis();
 	if (now - lastScreenRefresh > screenRefreshPeriod) {
 		display.update();
+		lastScreenRefresh = now;
 	}
 }
 
