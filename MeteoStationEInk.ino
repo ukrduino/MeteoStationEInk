@@ -64,7 +64,8 @@ void setup()
 	display.init();
 	display.fillScreen(GxEPD_WHITE);
 	display.update();
-	dht.setup(dhtPin);
+	dht.setup(dhtPin);	
+	WiFi.mode(WIFI_STA);
 	client.setServer(mqtt_server, 1883);
 	client.setCallback(callback);
 	setup_wifi();
@@ -94,9 +95,9 @@ void connectToBroker() {
 		client.publish("Weather/update", "1");
 		// ... and resubscribe
 		client.subscribe("WittyCloud/temp");
-		client.subscribe("WemosD1Mini_2/temp");
-		client.subscribe("WemosD1Mini_2/humidity");
-		client.subscribe("WemosD1Mini_2/pressure");
+		client.subscribe("BME280/temp");
+		client.subscribe("BME280/humidity");
+		client.subscribe("BME280/pressure");
 		client.subscribe("Wheather/showIcon");
 		client.subscribe("Wheather/showWind");
 		client.subscribe("Date");
@@ -104,7 +105,7 @@ void connectToBroker() {
 	else {
 		Serial.print("failed, rc=");
 		Serial.print(client.state());
-		Serial.println(" try again in 5 minutes");
+		Serial.println(" try again in 60 seconds");
 	}
 }
 
@@ -195,7 +196,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 			drawDisplay();
 		}
 	}
-	if (strcmp(topic, "WemosD1Mini_2/temp") == 0) {
+	if (strcmp(topic, "BME280/temp") == 0) {
 		char* buffer = (char*)payload;
 		buffer[length] = '\0';
 		float livT = atof(buffer);
@@ -206,14 +207,14 @@ void callback(char* topic, byte* payload, unsigned int length) {
 			drawDisplay();
 		}
 	}
-	if (strcmp(topic, "WemosD1Mini_2/humidity") == 0) {
+	if (strcmp(topic, "BME280/humidity") == 0) {
 		char* buffer = (char*)payload;
 		buffer[length] = '\0';
 		livHumidity = atof(buffer);
 		drawDisplay();
 		
 	}
-	if (strcmp(topic, "WemosD1Mini_2/pressure") == 0) {
+	if (strcmp(topic, "BME280/pressure") == 0) {
 		char* buffer = (char*)payload;
 		buffer[length] = '\0';
 		float press = atof(buffer);
@@ -438,9 +439,11 @@ void getDTHSensorData() {
 		Serial.println("Reading from DHT sensor!");
 		// Reading temperature or humidity takes about 250 milliseconds!
 		// Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-		float sensorHum = dht.getHumidity();
+		float sensorHum = dht.getHumidity() - 6.0F;
+		Serial.println(sensorHum);
 		// Read temperature as Celsius (the default)
-		float sensorTemp = dht.getTemperature();
+		float sensorTemp = dht.getTemperature() + 1.5F;
+		Serial.println(sensorTemp);
 		// Read temperature as Fahrenheit (isFahrenheit = true)
 		// Check if any reads failed and exit early (to try again).
 		if (isnan(sensorHum) || isnan(sensorTemp)) {
