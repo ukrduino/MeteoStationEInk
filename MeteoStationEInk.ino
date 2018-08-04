@@ -442,7 +442,7 @@ void getDTHSensorData() {
 		float sensorHum = dht.getHumidity() - 6.0F;
 		Serial.println(sensorHum);
 		// Read temperature as Celsius (the default)
-		float sensorTemp = dht.getTemperature() + 1.5F;
+		float sensorTemp = dht.getTemperature();
 		Serial.println(sensorTemp);
 		// Read temperature as Fahrenheit (isFahrenheit = true)
 		// Check if any reads failed and exit early (to try again).
